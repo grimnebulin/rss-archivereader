@@ -47,8 +47,9 @@ sub new {
     my $self = bless {
         map {
             $_ => scalar $param->($_)
-        } qw(agent_id rss_file items_to_fetch items_to_keep next_page
-             feed_title feed_link feed_description)
+        } qw(
+             agent_id feed_title feed_link feed_description
+             rss_file items_to_fetch items_to_keep render next_page)
     }, $class;
 
     defined(my $first_page = $param->('first_page'))
@@ -89,11 +90,15 @@ sub ITEMS_TO_KEEP {
     return 10;
 }
 
-sub FIRST_PAGE {
+sub RENDER {
     return undef;
 }
 
 sub NEXT_PAGE {
+    return undef;
+}
+
+sub FIRST_PAGE {
     return undef;
 }
 
@@ -113,25 +118,27 @@ sub run {
     my $uri;
 
     if (@$items) {
-        my $link = $items->[-1]{link};
-        my $tree = $self->_get_tree($link);
-        my $next = $self->next_page($tree);
+        my $link = URI->new($items->[-1]{link});
+        my $tree = $self->get_tree($link);
+        my $next = $self->next_page($tree, $link->clone);
         $uri = $next && URI->new_abs($next, $link);
     } else {
         $uri = $self->{first_page};
     }
 
     while (--$count >= 0 && $uri) {
-        my $tree = $self->_get_tree($uri);
+        my $tree = $self->get_tree($uri);
         $rss->add_item(
-            link        => $uri,
-            title       => scalar $self->title($tree, $uri),
-            description => _render($self->render($tree)),
+            link        => "$uri",
+            title       => scalar $self->title($tree, $uri->clone),
+            description => _render($self->render($tree, $uri->clone)),
             pubDate     => DateTime::Format::Mail->format_datetime($time),
         );
-        $time += $ONE_SECOND;
-        my $next_uri = $self->next_page($tree);
-        $uri = $next_uri && URI->new_abs($next_uri, $uri);
+        if ($count > 0) {
+            $time += $ONE_SECOND;
+            my $next_uri = $self->next_page($tree, $uri->clone);
+            $uri = $next_uri && URI->new_abs($next_uri, $uri);
+        }
     }
 
     splice @$items, 0, -$self->{items_to_keep} if @$items > $self->{items_to_keep};
@@ -147,15 +154,6 @@ sub run {
 
     return;
 
-}
-
-sub channel {
-    my $self = shift;
-    return (
-        title       => scalar $self->feed_title,
-        link        => scalar $self->feed_link,
-        description => scalar $self->feed_description,
-    );
 }
 
 sub feed_title {
@@ -180,8 +178,25 @@ sub feed_description {
 
 sub title {
     my ($self, $tree, $uri) = @_;
-    my ($title) = $tree->findnodes('//title');
-    return $title ? $title->as_trimmed_text : $uri;
+    my ($title) = $tree->findnodes('/html/head/title');
+    return defined $title ? $title->as_trimmed_text : $uri;
+}
+
+sub get_tree {
+    my ($self, $uri) = @_;
+    my $response = $self->agent->get($uri);
+    $response->is_success or die "Failed to download $uri: ", $response->as_string, "\n";
+    return HTML::TreeBuilder::XPath->new_from_content(
+        $self->decode_response($response)
+    );
+}
+
+sub render {
+    my ($self, $tree) = @_;
+    defined(my $xpath = $self->{render})
+        or die "Don't know how to render pages\n";
+    my ($elem) = $tree->findnodes($xpath) or return;
+    return $elem;
 }
 
 sub next_page {
@@ -192,20 +207,11 @@ sub next_page {
 
     my ($href) = $tree->findnodes($xpath) or return;
 
-    if (Scalar::Util::blessed($href)) {
-        if ($href->isa('HTML::TreeBuilder::XPath::Attribute')) {
-            return $href->getValue;
-        } elsif ($href->isa('HTML::Element')) {
-            return $href->as_trimmed_text;
-        }
-    }
+    Scalar::Util::blessed($href) && $href->isa('HTML::TreeBuilder::XPath::Attribute')
+        or die "next_page parameter did not return an attribute node\n";
 
-    return "$href";
+    return $href->getValue;
 
-}
-
-sub render {
-    shift->_undefined('render');
 }
 
 sub new_element {
@@ -214,15 +220,9 @@ sub new_element {
     return HTML::Element->new_from_lol([ @_ ]);
 }
 
-
 sub decode_response {
     my ($self, $response) = @_;
     return $response->decoded_content;
-}
-
-sub _undefined {
-    my ($self, $method) = @_;
-    die "No $method method defined for class ", ref $self, "\n";
 }
 
 sub _get_rss {
@@ -231,17 +231,17 @@ sub _get_rss {
     return $rss if $rss;
     die $@ if $@ !~ /no such file/i;
     $rss = XML::RSS->new(version => $RSS_VERSION);
-    $rss->channel($self->channel);
+    $rss->channel(
+        title       => scalar $self->feed_title,
+        link        => scalar $self->feed_link,
+        description => scalar $self->feed_description,
+        $self->extra_channel_params,
+    );
     return $rss;
 }
 
-sub _get_tree {
-    my ($self, $uri) = @_;
-    my $response = $self->agent->get($uri);
-    $response->is_success or die "Failed to download $uri\n";
-    return HTML::TreeBuilder::XPath->new_from_content(
-        $self->decode_response($response)
-    );
+sub extra_channel_params {
+    return;
 }
 
 sub _render {
