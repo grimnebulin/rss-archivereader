@@ -121,7 +121,7 @@ sub run {
         my $link = URI->new($items->[-1]{link});
         my $tree = $self->_get_tree($link);
         my $next = $self->next_page($tree, $link->clone);
-        $uri = $next && URI->new_abs($next, $link);
+        $uri = $next && _resolve($next, $link, $tree);
     } else {
         $uri = $self->{first_page};
     }
@@ -137,7 +137,7 @@ sub run {
         if ($count > 0) {
             $time += $ONE_SECOND;
             my $next_uri = $self->next_page($tree, $uri->clone);
-            $uri = $next_uri && URI->new_abs($next_uri, $uri);
+            $uri = $next_uri && _resolve($next_uri, $uri, $tree);
         }
     }
 
@@ -228,6 +228,15 @@ sub new_element {
 sub decode_response {
     my ($self, $response) = @_;
     return $response->decoded_content;
+}
+
+sub _resolve {
+    my ($href, $uri, $tree) = @_;
+    if (my ($base) = $tree->findnodes('/html/head/base/@href')) {
+        $base = URI->new($base->getValue);
+        $uri = $base if defined $base->scheme;
+    }
+    return URI->new_abs($href, $uri);
 }
 
 sub _get_rss {
@@ -551,7 +560,8 @@ the pages of an archive.
 Returns the URI of the archive page following the one at the URI
 C<$uri> (a C<URI> object), whose page content has been parsed into the
 C<HTML::TreeBuilder::XPath> object C<$tree>.  The returned URI need
-not be absolute; if relative, it is taken to be relative to C<$uri>.
+not be absolute; if relative, it is taken to be relative to its page's
+E<lt>baseE<gt> element, if it has one, or else relative to C<$uri>.
 
 The default implementation uses the C<next_page> parameter (throwing
 an exception if it is not defined) as an XPath expression, applying it
