@@ -119,7 +119,7 @@ sub run {
 
     if (@$items) {
         my $link = URI->new($items->[-1]{link});
-        my $tree = $self->get_tree($link);
+        my $tree = $self->_get_tree($link);
         my $next = $self->next_page($tree, $link->clone);
         $uri = $next && URI->new_abs($next, $link);
     } else {
@@ -127,7 +127,7 @@ sub run {
     }
 
     while (--$count >= 0 && $uri) {
-        my $tree = $self->get_tree($uri);
+        my $tree = $self->_get_tree($uri);
         $rss->add_item(
             link        => "$uri",
             title       => scalar $self->title($tree, $uri->clone),
@@ -182,13 +182,18 @@ sub title {
     return defined $title ? $title->as_trimmed_text : $uri;
 }
 
-sub get_tree {
+sub _get_tree {
     my ($self, $uri) = @_;
-    my $response = $self->agent->get($uri);
+    my $response = $self->get_page($uri);
     $response->is_success or die "Failed to download $uri: ", $response->as_string, "\n";
     return HTML::TreeBuilder::XPath->new_from_content(
         $self->decode_response($response)
     );
+}
+
+sub get_page {
+    my ($self, $uri) = @_;
+    return $self->agent->get($uri);
 }
 
 sub render {
@@ -517,12 +522,11 @@ default implementation simply returns the page's HTML title, or if
 that is undefined for some reason, then the URI C<$uri>.  May be
 overridden to provide different logic for titling items.
 
-=item $reader->get_tree($uri)
+=item $reader->get_page($uri)
 
-Fetches the document at the URI C<$uri> (a C<URI> object) using the
-user agent returned by the C<agent> method, parses the document into a
-tree structure using C<HTML::TreeBuilder::XPath>, and returns the
-tree.
+Returns the web page referred to by the C<URI> object C<$uri> as an
+C<HTTP::Response> object.  The default implementation simply returns
+C<$reader-E<gt>agent-E<gt>get($uri)>.  May be overridden.
 
 =item $reader->render($tree, $uri)
 
