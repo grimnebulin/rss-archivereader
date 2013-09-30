@@ -45,7 +45,7 @@ Now, whenever I run the command
 run this command in a daily cron job to get a steady stream of comics.
 
 The base class `RSS::ArchiveReader` provides a number of overridable
-method, but (as in the example) no overriding may be needed if an
+methods, but (as in the example) no overriding may be needed if an
 archive's content is simple enough:
 
 * If the content to be rendered into the RSS feed is single HTML
