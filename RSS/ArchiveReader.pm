@@ -402,14 +402,23 @@ parameter, but uppercased.  Explicitly:
 =over 4
 
 =item AGENT_ID
+
 =item FEED_TITLE
+
 =item FEED_LINK
+
 =item FEED_DESCRIPTION
+
 =item RSS_FILE
+
 =item ITEMS_TO_FETCH
+
 =item ITEMS_TO_KEEP
+
 =item FIRST_PAGE
+
 =item RENDER
+
 =item NEXT_PAGE
 
 =back
@@ -511,8 +520,10 @@ its C<channel> method:
 
 =over 4
 
-=item title => $reader->feed_title
-=item link => $reader->feed_link
+=item title       => $reader->feed_title
+
+=item link        => $reader->feed_link
+
 =item description => $reader->feed_description
 
 =back
@@ -592,6 +603,8 @@ constructor of the C<HTML::Element> class.  The arguments to this
 method are wrapped in an array reference, which is passed to
 C<new_from_lol>.  Example:
 
-    my $elem = $self->new_element('p', 'This is ', [ 'i', 'italicized' ], ' text');
+    my $elem = $self->new_element(
+        'p', 'This is ', [ 'i', 'italicized' ], ' text'
+    );
 
 =back
