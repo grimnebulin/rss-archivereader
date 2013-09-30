@@ -119,7 +119,7 @@ sub run {
 
     if (@$items) {
         my $link = URI->new($items->[-1]{link});
-        my $tree = $self->_get_tree($link);
+        my $tree = $self->get_tree($link);
         my $next = $self->next_page($tree, $link->clone);
         $uri = $next && _resolve($next, $link, $tree);
     } else {
@@ -127,7 +127,7 @@ sub run {
     }
 
     while (--$count >= 0 && $uri) {
-        my $tree = $self->_get_tree($uri);
+        my $tree = $self->get_tree($uri);
         $rss->add_item(
             link        => "$uri",
             title       => scalar $self->title($tree, $uri->clone),
@@ -182,7 +182,7 @@ sub title {
     return defined $title ? $title->as_trimmed_text : $uri;
 }
 
-sub _get_tree {
+sub get_tree {
     my ($self, $uri) = @_;
     my $response = $self->get_page($uri);
     $response->is_success or die "Failed to download $uri: ", $response->as_string, "\n";
@@ -547,6 +547,15 @@ overridden to provide different logic for titling items.
 Returns the web page referred to by the C<URI> object C<$uri> as an
 C<HTTP::Response> object.  The default implementation simply returns
 C<$reader-E<gt>agent-E<gt>get($uri)>.  May be overridden.
+
+=item $reader->get_tree($uri)
+
+A convenience method that fetches the page at C<$uri> by calling
+C<$reader-E<gt>get_page($uri)> and parses the returned content into an
+C<HTML:::TreeBuilder::XPath> tree, which is returned.  The page is
+fetched using C<$reader>'s agent and the response is decoded by
+calling C<$reader>'s C<decode_response> method, so this method may not
+be suitable for processing pages outside of the main archive.
 
 =item $reader->render($tree, $uri)
 
