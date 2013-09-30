@@ -232,8 +232,8 @@ sub decode_response {
 
 sub resolve {
     my ($self, $href, $tree, $uri) = @_;
-    $uri = URI->new($uri);
-    return $uri if defined $uri->scheme;
+    $href = URI->new($href);
+    return $href if defined $href->scheme;
     if (my ($base) = $tree->findnodes('/html/head/base/@href')) {
         $base = URI->new($base->getValue);
         $uri = $base if defined $base->scheme;
