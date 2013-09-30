@@ -121,7 +121,7 @@ sub run {
         my $link = URI->new($items->[-1]{link});
         my $tree = $self->get_tree($link);
         my $next = $self->next_page($tree, $link->clone);
-        $uri = $next && _resolve($next, $link, $tree);
+        $uri = $next && $self->resolve($next, $tree, $link->clone);
     } else {
         $uri = $self->{first_page};
     }
@@ -137,7 +137,7 @@ sub run {
         if ($count > 0) {
             $time += $ONE_SECOND;
             my $next_uri = $self->next_page($tree, $uri->clone);
-            $uri = $next_uri && _resolve($next_uri, $uri, $tree);
+            $uri = $next_uri && $self->resolve($next_uri, $tree, $uri->clone);
         }
     }
 
@@ -230,8 +230,10 @@ sub decode_response {
     return $response->decoded_content;
 }
 
-sub _resolve {
-    my ($href, $uri, $tree) = @_;
+sub resolve {
+    my ($self, $href, $tree, $uri) = @_;
+    $uri = URI->new($uri);
+    return $uri if defined $uri->scheme;
     if (my ($base) = $tree->findnodes('/html/head/base/@href')) {
         $base = URI->new($base->getValue);
         $uri = $base if defined $base->scheme;
@@ -604,6 +606,26 @@ C<$uri>, the link to one of the items handled by this tree.
 The default implementation simply returns
 C<$response-E<gt>decoded_content()>, but a subclass may override this
 method if special handling is needed.
+
+=item $reader->resolve($href, $tree, $uri)
+
+Resolves C<$href> into an absolute URI.  If C<$href> is already
+absolute, it is simply returned.  Otherwise, a new absolute C<URI>
+object is returned which is constructed from C<$href> by taking it as
+relative to one of two absolute URIs:
+
+=over 4
+
+=item
+
+The <base> element of the HTML page which has been parsed into
+C<$tree>, if the page has one; or else
+
+=item
+
+C<$uri>, the URI of the page which was parsed into C<$tree>.
+
+=back
 
 =item $reader->new_element(...)
 

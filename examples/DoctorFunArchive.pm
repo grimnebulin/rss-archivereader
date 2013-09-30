@@ -18,7 +18,7 @@ sub render {
     my ($self, $tree, $uri) = @_;
     return map {
         $self->new_element(
-            'div', [ 'img', { src => URI->new_abs($_->getValue, $uri) } ]
+            'div', [ 'img', { src => $self->resolve($_->getValue, $tree, $uri) } ]
         )
     } $tree->findnodes('//a[img[contains(@src,"/thumbs/")]]/@href');
 }

@@ -35,7 +35,7 @@ sub render {
     my $copy  = File::Temp->new(DIR => $IMAGE_DIR, SUFFIX => '.jpg', UNLINK => 0);
 
     my $response = $self->agent->get(
-        URI->new_abs($img->attr('src'), $uri),
+        $self->resolve($img->attr('src'), $tree, $uri),
         Referer => $uri,
         ':content_file' => "$copy",
     );
