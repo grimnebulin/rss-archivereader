@@ -30,6 +30,8 @@ use strict;
 
 my $RSS_VERSION = '2.0';
 
+my $RUNS_TO_KEEP = 5;
+
 my $ONE_SECOND = DateTime::Duration->new(seconds => 1);
 
 ########################################
@@ -88,7 +90,7 @@ sub ITEMS_TO_FETCH {
 }
 
 sub ITEMS_TO_KEEP {
-    return 10;
+    return undef;
 }
 
 sub RENDER {
@@ -146,7 +148,11 @@ sub run {
         }
     }
 
-    splice @$items, 0, -$self->{items_to_keep} if @$items > $self->{items_to_keep};
+    my $keep = defined $self->{items_to_keep}
+        ? $self->{items_to_keep}
+        : $RUNS_TO_KEEP * $self->{items_to_fetch};
+
+    splice @$items, 0, -$keep if @$items > $keep;
 
     if ($param{print}) {
         print $rss->as_string;
@@ -386,8 +392,9 @@ method.   Defaults to 1.
 
 =item items_to_keep
 
-The maximum number of items to retain in the output RSS file.
-Defaults to 10.
+The maximum number of items to retain in the output RSS file.  If
+undefined, then a number of items will be retained equal to five times
+the value of the C<items_to_fetch> paramter.  Defaults to C<undef>.
 
 =item first_page
 
@@ -511,8 +518,9 @@ passing the HTML tree to the C<next_page> method.
 =item
 
 The new items are appended to the old items in the original RSS file.
-A number of most-recent items equal to the value of the
-C<items_to_keep> parameter are kept; the rest are discarded.
+A number of most-recent items derived from the C<items_to_keep>
+parameter are kept; the rest are discarded.  See the description of
+the C<items_to_keep> parameter for details.
 
 To be precise, a new RSS file is created by appending ".tmp" to the
 name of the original one; then the new file is renamed to the
