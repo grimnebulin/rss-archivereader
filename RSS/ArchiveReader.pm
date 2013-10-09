@@ -49,7 +49,8 @@ sub new {
             $_ => scalar $param->($_)
         } qw(
              agent_id feed_title feed_link feed_description
-             rss_file items_to_fetch items_to_keep render next_page)
+             rss_file items_to_fetch items_to_keep render next_page
+             autoresolve)
     }, $class;
 
     defined(my $first_page = $param->('first_page'))
@@ -102,6 +103,10 @@ sub FIRST_PAGE {
     return undef;
 }
 
+sub AUTORESOLVE {
+    return 1;
+}
+
 sub agent {
     my $self = shift;
     return $self->{agent} ||= LWP::UserAgent->new(
@@ -131,7 +136,7 @@ sub run {
         $rss->add_item(
             link        => "$uri",
             title       => scalar $self->title($tree, $uri->clone),
-            description => _render($self->render($tree, $uri->clone)),
+            description => $self->_stringify($tree, $uri->clone, $self->render($tree, $uri->clone)),
             pubDate     => DateTime::Format::Mail->format_datetime($time),
         );
         if ($count > 0) {
@@ -260,12 +265,23 @@ sub extra_channel_params {
     return;
 }
 
-sub _render {
+sub _stringify {
+    my ($self, $tree, $uri, @chunk) = @_;
     return join "", map {
         Scalar::Util::blessed($_) && $_->isa('HTML::Element')
-            ? $_->as_HTML("", undef, { })
+            ? ($self->{autoresolve} ? $self->_resolve_element($_, $tree, $uri) : $_)
+                  ->as_HTML("", undef, { })
             : $_
-    } @_;
+    } @chunk;
+}
+
+sub _resolve_element {
+    my ($self, $elem, $tree, $uri) = @_;
+    my $clone = $elem->clone;
+    for my $e ($clone->find_by_tag_name('img', 'iframe', 'embed')) {
+        $e->attr('src', $self->resolve($e->attr('src'), $tree, $uri));
+    }
+    return $clone;
 }
 
 
@@ -394,6 +410,15 @@ The default implementation of the C<next_page> method uses this
 parameter as an XPath expression to locate the "next" link on a web
 page.
 
+=item autoresolve
+
+A boolean flag.  If true, then the C<src> attributes of any C<img>,
+C<iframe>, and C<embed> elements returned by the C<render> method
+(either directly, or as descendant elements) are resolved to absolute
+URIs if necessary by calling the C<resolve> method (which see).
+
+The default value is true.
+
 =back
 
 It is convenient not to have to write a constructor for every subclass
@@ -422,6 +447,8 @@ parameter, but uppercased.  Explicitly:
 =item RENDER
 
 =item NEXT_PAGE
+
+=item AUTORESOLVE
 
 =back
 
