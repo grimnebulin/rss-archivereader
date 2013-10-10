@@ -17,7 +17,7 @@ use strict;
 #  can then clean up older images.
 
 use constant {
-    FEED_TITLE     => q(Foo Archive),
+    FEED_TITLE     => 'Foo Archive',
     RSS_FILE       => "$ENV{HOME}/www/rss/foo.xml",
     FIRST_PAGE     => 'http://www.foo_.com/start.html',
     ITEMS_TO_FETCH => 3,

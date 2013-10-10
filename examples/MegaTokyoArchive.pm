@@ -8,7 +8,6 @@ use constant {
     RSS_FILE       => "$ENV{HOME}/www/rss/megatokyo.xml",
     FIRST_PAGE     => 'http://megatokyo.com/strip/1',
     ITEMS_TO_FETCH => 5,
-    ITEMS_TO_KEEP  => 20,
     RENDER         => '//span[@id="strip"]//img[contains(@src,"strips/")]',
     NEXT_PAGE      => '//li[contains(concat(" ",normalize-space(@class)," ")," next ")]//a/@href',
 };

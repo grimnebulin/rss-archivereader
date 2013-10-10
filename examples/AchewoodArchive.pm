@@ -11,7 +11,6 @@ use constant {
     RSS_FILE         => "$ENV{HOME}/www/rss/achewood-archive.xml",
     FIRST_PAGE       => 'http://achewood.com/index.php?date=10012001',
     ITEMS_TO_FETCH   => 10,
-    ITEMS_TO_KEEP    => 40,
     NEXT_PAGE        => '//a[normalize-space()="»"]/@href',
 };
 
