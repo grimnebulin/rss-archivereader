@@ -52,7 +52,7 @@ sub new {
         } qw(
              agent_id feed_title feed_link feed_description
              rss_file items_to_fetch items_to_keep render next_page
-             autoresolve)
+             autoresolve cache_dir cache_mode cache_url)
     }, $class;
 
     defined(my $first_page = $param->('first_page'))
@@ -107,6 +107,18 @@ sub FIRST_PAGE {
 
 sub AUTORESOLVE {
     return 1;
+}
+
+sub CACHE_DIR {
+    return undef;
+}
+
+sub CACHE_URL {
+    return undef;
+}
+
+sub CACHE_MODE {
+    return 0644;
 }
 
 sub agent {
@@ -290,6 +302,65 @@ sub _resolve_element {
     return $clone;
 }
 
+sub cache_file {
+    my ($self, $tree, $uri, $href, $mode) = @_;
+    defined $self->{cache_dir}
+        or die "Cannot cache file; cache directory is undefined\n";
+
+    my ($suffix) = $href =~ m|(\.[^/]+)\z|;
+
+    require File::Temp;
+
+    my $copy = File::Temp->new(
+        DIR    => $self->{cache_dir},
+        UNLINK => 0,
+        defined $suffix ? (SUFFIX => $suffix) : (),
+    );
+
+    my $response = $self->agent->get(
+        $self->resolve($href, $tree, $uri),
+        Referer => $uri,
+        ':content_file' => $copy->filename,
+    );
+
+    $response->is_success or return;
+    defined $mode or $mode = $self->{cache_mode};
+    chmod $mode, $copy if defined $mode;
+
+    return $copy;
+
+}
+
+sub cache_image {
+    my ($self, $tree, $uri, $img, $mode) = @_;
+    defined $self->{cache_url} or die "Cannot cache image: cache URL is undefined\n";
+
+    require File::Basename;
+
+    my ($src, $width, $height, $alt, $title) =
+        map $img->attr($_), qw(src width height alt title);
+
+    my $copy = $self->cache_file($tree, $uri, $src, $mode) or return;
+
+    if (!defined $width || !defined $height) {
+        eval {
+            require Image::Size;
+            my ($w, $h) = Image::Size::imgsize($copy);
+            defined $width  or $width  = $w;
+            defined $height or $height = $h;
+        };
+    }
+
+    return $self->new_element('img', {
+        src => $self->{cache_url} . '/' . File::Basename::fileparse($copy),
+        defined $width  ? (width  => $width)  : (),
+        defined $height ? (height => $height) : (),
+        defined $alt    ? (alt    => $alt)    : (),
+        defined $title  ? (title  => $title)  : (),
+    });
+
+}
+
 
 1;
 
@@ -426,6 +497,21 @@ URIs if necessary by calling the C<resolve> method (which see).
 
 The default value is true.
 
+=item cache_dir
+
+A directory for cached files.  See the C<cache_file> method for more
+information.  The default value is C<undef>.
+
+=item cache_mode
+
+The default mode for cached files.  See the C<cache_file> method for
+more information.  The default value is 0644.
+
+=item cache_url
+
+A URL for cached images.  See the C<cache_image> method for more
+information.  The default value is C<undef>.
+
 =back
 
 It is convenient not to have to write a constructor for every subclass
@@ -456,6 +542,12 @@ parameter, but uppercased.  Explicitly:
 =item NEXT_PAGE
 
 =item AUTORESOLVE
+
+=item CACHE_DIR
+
+=item CACHE_MODE
+
+=item CACHE_URL
 
 =back
 
@@ -661,6 +753,42 @@ C<$tree>, if the page has one; or else
 C<$uri>, the URI of the page which was parsed into C<$tree>.
 
 =back
+
+=item $reader->cache_file($tree, $uri, $href, $mode)
+
+Downloads a file which is referenced in an archive page that was
+previously downloaded from C<$uri> and parsed into the tree C<$tree>.
+C<$href> is the URI of the file; it is resolved to an absolute URI by
+calling C<$reader-E<gt>resolve($href, $tree, $uri)>.
+
+The remote file is downloaded into a local file referenced by a new
+C<File::Temp> object, which is returned.  The "Referer" HTTP request
+header is set to C<$uri>.  The local file's name is given the same
+suffix as the remote file's, if it has one.  The local file is stored
+in a directory named by the C<cache_dir> parameter; if that parameter
+is undefined, C<cache_file> will raise an exception immediately.  The
+local file's mode will be set to C<$mode> if it's defined, or to the
+value of the C<cache_mode> parameter if that is defined; otherwise the
+file's mode will not be changed from whatever C<File::Temp> created it
+as.
+
+=item $reader->cache_image($tree, $uri, $img, $mode)
+
+A convenience wrapper around the C<cache_file> method that's
+specialized for HTML <img> elements.  The C<$tree>, C<$uri>, and
+C<$mode> parameters have the same meanings as for that method; C<$img>
+is an HTML <img> element which should be a descendant of C<$tree>.
+The image file referenced by that element's C<src> attribute is
+downloaded as per the C<cache_file> method, but rather than returning
+the C<File::Temp> object that references the file, a brand-new <img>
+C<HTML::Element> is returned.  The C<src> attribute of this object is
+created by appending the a slash and base name of the new file to the
+value of the C<cache_url> parameter, which must be defined or an
+exception will be raised.  The new element inherits the C<width>,
+C<height>, C<alt>, and C<title> attributes of the original element,
+except that whichever of the C<width> or C<height> attributes were not
+present (if any) are set by examining the file with the C<Image::Size>
+module, if it's available.
 
 =item $reader->new_element(...)
 
