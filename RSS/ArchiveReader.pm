@@ -483,7 +483,9 @@ page.
 A boolean flag.  If true, then the C<src> attributes of any C<img>,
 C<iframe>, and C<embed> elements returned by the C<render> method
 (either directly, or as descendant elements) are resolved to absolute
-URIs if necessary by calling the C<resolve> method (which see).
+URIs if necessary by calling the C<resolve> method of the
+C<RSS::ArchiveReader::HtmlDocument> object from which the archive page
+originated.
 
 The default value is true.
 
@@ -495,7 +497,7 @@ information.  The default value is C<undef>.
 =item cache_mode
 
 The default mode for cached files.  See the C<cache_file> method for
-more information.  The default value is 0644.
+more information.  The default value is C<0644>.
 
 =item cache_url
 
