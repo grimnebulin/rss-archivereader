@@ -15,12 +15,12 @@ use constant {
 #  of them into a separate div.
 
 sub render {
-    my ($self, $tree, $uri) = @_;
+    my ($self, $doc) = @_;
     return map {
         $self->new_element(
-            'div', [ 'img', { src => $self->resolve($_->getValue, $tree, $uri) } ]
+            'div', [ 'img', { src => $_->attr_absolute('href') } ]
         )
-    } $tree->findnodes('//a[img[contains(@src,"/thumbs/")]]/@href');
+    } $doc->findnodes('//a[img[contains(@src,"/thumbs/")]]');
 }
 
 

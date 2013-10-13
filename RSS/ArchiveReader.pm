@@ -21,8 +21,8 @@ package RSS::ArchiveReader;
 use DateTime;
 use DateTime::Duration;
 use DateTime::Format::Mail;
-use HTML::TreeBuilder::XPath;
 use LWP::UserAgent;
+use RSS::ArchiveReader::HtmlDocument;
 use Scalar::Util;
 use URI;
 use XML::RSS;
@@ -138,25 +138,25 @@ sub run {
 
     if (@$items) {
         my $link = URI->new($items->[-1]{link});
-        my $tree = $self->get_tree($link);
-        my $next = $self->next_page($tree, $link->clone);
-        $uri = $next && $self->resolve($next, $tree, $link->clone);
+        my $doc  = $self->get_doc($link);
+        my $next = $self->next_page($doc);
+        $uri = $next && $doc->resolve($next);
     } else {
         $uri = $self->{first_page};
     }
 
     while (--$count >= 0 && $uri) {
-        my $tree = $self->get_tree($uri);
+        my $doc = $self->get_doc($uri->clone);
         $rss->add_item(
             link        => "$uri",
-            title       => scalar $self->title($tree, $uri->clone),
-            description => $self->_stringify($tree, $uri->clone, $self->render($tree, $uri->clone)),
+            title       => scalar $self->title($doc),
+            description => $self->_stringify($doc, $self->render($doc)),
             pubDate     => DateTime::Format::Mail->format_datetime($time),
         );
         if ($count > 0) {
             $time += $ONE_SECOND;
-            my $next_uri = $self->next_page($tree, $uri->clone);
-            $uri = $next_uri && $self->resolve($next_uri, $tree, $uri->clone);
+            my $next_uri = $self->next_page($doc);
+            $uri = $next_uri && $doc->resolve($next_uri);
         }
     }
 
@@ -200,17 +200,18 @@ sub feed_description {
 }
 
 sub title {
-    my ($self, $tree, $uri) = @_;
-    my ($title) = $tree->findnodes('/html/head/title');
-    return defined $title ? $title->as_trimmed_text : $uri;
+    my ($self, $doc) = @_;
+    my ($title) = $doc->findnodes('/html/head/title');
+    return defined $title ? $title->as_trimmed_text : $doc->source;
 }
 
-sub get_tree {
+sub get_doc {
     my ($self, $uri) = @_;
     my $response = $self->get_page($uri);
-    $response->is_success or die "Failed to download $uri: ", $response->as_string, "\n";
-    return HTML::TreeBuilder::XPath->new_from_content(
-        $self->decode_response($response)
+    $response->is_success
+        or die "Failed to download $uri: ", $response->as_string, "\n";
+    return RSS::ArchiveReader::HtmlDocument->new(
+        $uri, $self->decode_response($response)
     );
 }
 
@@ -220,20 +221,20 @@ sub get_page {
 }
 
 sub render {
-    my ($self, $tree) = @_;
+    my ($self, $doc) = @_;
     defined(my $xpath = $self->{render})
         or die "Don't know how to render pages\n";
-    my ($elem) = $tree->findnodes($xpath) or return;
+    my ($elem) = $doc->findnodes($xpath) or return;
     return $elem;
 }
 
 sub next_page {
-    my ($self, $tree) = @_;
+    my ($self, $doc) = @_;
 
     defined(my $xpath = $self->{next_page})
         or die "Don't know how to advance to next page\n";
 
-    my ($href) = $tree->findnodes($xpath) or return;
+    my ($href) = $doc->findnodes($xpath) or return;
 
     Scalar::Util::blessed($href) && $href->isa('HTML::TreeBuilder::XPath::Attribute')
         or die "next_page parameter did not return an attribute node\n";
@@ -251,17 +252,6 @@ sub new_element {
 sub decode_response {
     my ($self, $response) = @_;
     return $response->decoded_content;
-}
-
-sub resolve {
-    my ($self, $href, $tree, $uri) = @_;
-    $href = URI->new($href);
-    return $href if defined $href->scheme;
-    if (my ($base) = $tree->findnodes('/html/head/base/@href')) {
-        $base = URI->new($base->getValue);
-        $uri = $base if defined $base->scheme;
-    }
-    return URI->new_abs($href, $uri);
 }
 
 sub _get_rss {
@@ -284,26 +274,26 @@ sub extra_channel_params {
 }
 
 sub _stringify {
-    my ($self, $tree, $uri, @chunk) = @_;
+    my ($self, $doc, @chunk) = @_;
     return join "", map {
         Scalar::Util::blessed($_) && $_->isa('HTML::Element')
-            ? ($self->{autoresolve} ? $self->_resolve_element($_, $tree, $uri) : $_)
+            ? ($self->{autoresolve} ? $self->_resolve_element($_, $doc) : $_)
                   ->as_HTML("", undef, { })
             : $_
     } @chunk;
 }
 
 sub _resolve_element {
-    my ($self, $elem, $tree, $uri) = @_;
+    my ($self, $elem, $doc) = @_;
     my $clone = $elem->clone;
     for my $e ($clone->find_by_tag_name('img', 'iframe', 'embed')) {
-        $e->attr('src', $self->resolve($e->attr('src'), $tree, $uri));
+        $e->attr('src', $doc->resolve($e->attr('src')));
     }
     return $clone;
 }
 
 sub cache_file {
-    my ($self, $tree, $uri, $href, $mode) = @_;
+    my ($self, $doc, $href, $mode) = @_;
     defined $self->{cache_dir}
         or die "Cannot cache file; cache directory is undefined\n";
 
@@ -318,8 +308,8 @@ sub cache_file {
     );
 
     my $response = $self->agent->get(
-        $self->resolve($href, $tree, $uri),
-        Referer => $uri,
+        $doc->resolve($href),
+        Referer => $doc->source,
         ':content_file' => $copy->filename,
     );
 
@@ -332,7 +322,7 @@ sub cache_file {
 }
 
 sub cache_image {
-    my ($self, $tree, $uri, $img, $mode) = @_;
+    my ($self, $doc, $img, $mode) = @_;
     defined $self->{cache_url} or die "Cannot cache image: cache URL is undefined\n";
 
     require File::Basename;
@@ -340,7 +330,7 @@ sub cache_image {
     my ($src, $width, $height, $alt, $title) =
         map $img->attr($_), qw(src width height alt title);
 
-    my $copy = $self->cache_file($tree, $uri, $src, $mode) or return;
+    my $copy = $self->cache_file($doc, $src, $mode) or return;
 
     if (!defined $width || !defined $height) {
         eval {
@@ -662,14 +652,14 @@ passed.  Any C<title>, C<link>, or C<description> keys override the
 default values listed above.  The default implementation returns
 nothing.
 
-=item $reader->title($tree, $uri)
+=item $reader->title($doc)
 
-Returns the title to be given to the RSS item derived from the archive
-page at the URI C<$uri> (a C<URI> object), whose page content has been
-parsed into the C<HTML::TreeBuilder::XPath> object C<$tree>.  The
-default implementation simply returns the page's HTML title, or if
-that is undefined for some reason, then the URI C<$uri>.  May be
-overridden to provide different logic for titling items.
+Returns the title to be given to the RSS item derived from the
+C<RSS::ArchiveReader::HtmlDocument> object C<$doc>.  The default
+implementation simply returns the document's HTML title, or if that is
+undefined for some reason, then the URI from which the document was
+downloaded.  May be overridden to provide different logic for titling
+items.
 
 =item $reader->get_page($uri)
 
@@ -677,44 +667,42 @@ Returns the web page referred to by the C<URI> object C<$uri> as an
 C<HTTP::Response> object.  The default implementation simply returns
 C<$reader-E<gt>agent-E<gt>get($uri)>.  May be overridden.
 
-=item $reader->get_tree($uri)
+=item $reader->get_doc($uri)
 
 A convenience method that fetches the page at C<$uri> by calling
 C<$reader-E<gt>get_page($uri)> and parses the returned content into an
-C<HTML:::TreeBuilder::XPath> tree, which is returned.  The page is
-fetched using C<$reader>'s agent and the response is decoded by
-calling C<$reader>'s C<decode_response> method, so this method may not
-be suitable for processing pages outside of the main archive.
+C<RSS::ArchiveReader::HtmlDocument> object, which is returned.  The
+page is fetched using C<$reader>'s agent and the response is decoded
+by calling C<$reader>'s C<decode_response> method, so this method may
+not be suitable for processing pages outside of the main archive.
 
-=item $reader->render($tree, $uri)
+=item $reader->render($doc)
 
 Returns a list of values that will be used to create the
-C<description> field of the RSS item for the archive page at the URI
-C<$uri> (a C<URI> object), whose page content has been parsed into the
-C<HTML::TreeBuilder::XPath> object C<$tree>.  C<HTML::Element> objects
-in the returned list will be mapped into strings by calling their
-C<as_HTML> method; after that, all of the return values are
+C<description> field of the RSS item for the archived
+C<RSS::ArchiveReader::HtmlDocument> object C<$doc>.  C<HTML::Element>
+objects in the returned list will be mapped into strings by calling
+their C<as_HTML> method; after that, all of the return values are
 concatenated together into one string, which becomes an RSS item's
 C<description>.
 
 The default implementation uses the C<render> parameter (throwing an
 exception if it is not defined) as an XPath expression, applying it to
-C<$tree>.  The first matching node is returned.
+C<$doc>.  The first matching node is returned.
 
 This method may be overridden to provide different logic for rendering
 the pages of an archive.
 
-=item $reader->next_page($tree, $uri)
+=item $reader->next_page($doc)
 
-Returns the URI of the archive page following the one at the URI
-C<$uri> (a C<URI> object), whose page content has been parsed into the
-C<HTML::TreeBuilder::XPath> object C<$tree>.  The returned URI need
-not be absolute; if relative, it is taken to be relative to its page's
-E<lt>baseE<gt> element, if it has one, or else relative to C<$uri>.
+Returns the URI of the archive page represented by the
+C<RSS::ArchiveReader::HtmlDocument> object C<$doc>.  The returned URI
+need not be absolute; it is resolved into an absolute URI if
+necessary.
 
 The default implementation uses the C<next_page> parameter (throwing
 an exception if it is not defined) as an XPath expression, applying it
-to C<$tree>.  If no node is matched by the expression, then nothing is
+to C<$doc>.  If no node is matched by the expression, then nothing is
 returned, indicating that the end of the archive has been reached.
 Otherwise, the first of the matching nodes must be an instance of the
 class C<HTML::TreeBuilder::XPath::Attribute> (that is, it must match
@@ -734,53 +722,33 @@ The default implementation simply returns
 C<$response-E<gt>decoded_content()>, but a subclass may override this
 method if special handling is needed.
 
-=item $reader->resolve($href, $tree, $uri)
+=item $reader->cache_file($doc, $href, $mode)
 
-Resolves C<$href> into an absolute URI.  If C<$href> is already
-absolute, it is simply returned.  Otherwise, a new absolute C<URI>
-object is returned which is constructed from C<$href> by taking it as
-relative to one of two absolute URIs:
-
-=over 4
-
-=item
-
-The <base> element of the HTML page which has been parsed into
-C<$tree>, if the page has one; or else
-
-=item
-
-C<$uri>, the URI of the page which was parsed into C<$tree>.
-
-=back
-
-=item $reader->cache_file($tree, $uri, $href, $mode)
-
-Downloads a file which is referenced in an archive page that was
-previously downloaded from C<$uri> and parsed into the tree C<$tree>.
-C<$href> is the URI of the file; it is resolved to an absolute URI by
-calling C<$reader-E<gt>resolve($href, $tree, $uri)>.
+Downloads a file which is referenced in an archive page represented by
+the C<RSS::ArchiveReader::HtmlDocument> object C<$doc>.  C<$href> is
+the URI of the file; it is resolved to an absolute URI by calling
+C<$doc-E<gt>resolve($href)>.
 
 The remote file is downloaded into a local file referenced by a new
 C<File::Temp> object, which is returned.  The "Referer" HTTP request
-header is set to C<$uri>.  The local file's name is given the same
-suffix as the remote file's, if it has one.  The local file is stored
-in a directory named by the C<cache_dir> parameter; if that parameter
-is undefined, C<cache_file> will raise an exception immediately.  The
-local file's mode will be set to C<$mode> if it's defined, or to the
-value of the C<cache_mode> parameter if that is defined; otherwise the
-file's mode will not be changed from whatever C<File::Temp> created it
-as.
+header is set to C<$doc-E<gt>source>.  The local file's name is given
+the same suffix as the remote file's, if it has one.  The local file
+is stored in a directory named by the C<cache_dir> parameter; if that
+parameter is undefined, C<cache_file> will raise an exception
+immediately.  The local file's mode will be set to C<$mode> if it's
+defined, or to the value of the C<cache_mode> parameter if that is
+defined; otherwise the file's mode will not be changed from whatever
+C<File::Temp> created it as.
 
-=item $reader->cache_image($tree, $uri, $img, $mode)
+=item $reader->cache_image($doc, $img, $mode)
 
 A convenience wrapper around the C<cache_file> method that's
-specialized for HTML <img> elements.  The C<$tree>, C<$uri>, and
-C<$mode> parameters have the same meanings as for that method; C<$img>
-is an HTML <img> element which should be a descendant of C<$tree>.
-The image file referenced by that element's C<src> attribute is
-downloaded as per the C<cache_file> method, but rather than returning
-the C<File::Temp> object that references the file, a brand-new <img>
+specialized for HTML <img> elements.  The C<$doc> and C<$mode>
+parameters have the same meanings as for that method; C<$img> is an
+HTML <img> element which should be a descendant of C<$doc>.  The image
+file referenced by that element's C<src> attribute is downloaded as
+per the C<cache_file> method, but rather than returning the
+C<File::Temp> object that references the file, a brand-new <img>
 C<HTML::Element> is returned.  The C<src> attribute of this object is
 created by appending the a slash and base name of the new file to the
 value of the C<cache_url> parameter, which must be defined or an

@@ -18,8 +18,8 @@ use constant {
 #  week when it was originally posted.
 
 sub title {
-    my ($self, $tree, $uri) = @_;
-    my $title = $self->SUPER::title($tree, $uri);
+    my ($self, $doc) = @_;
+    my $title = $self->SUPER::title($doc);
     if ($title =~ /^(achewood\s+\S+\s+)(.+)/is) {
         if (defined(my $time = Date::Parse::str2time($2))) {
             $title = $1 . POSIX::strftime('%A', gmtime $time) . ', ' . $2;
@@ -32,8 +32,8 @@ sub title {
 #  italics below the image in its own <div>.
 
 sub render {
-    my ($self, $tree) = @_;
-    my ($image) = $tree->findnodes('//img[contains(@class,"comic")]') or die;
+    my ($self, $doc) = @_;
+    my ($image) = $doc->findnodes('//img[contains(@class,"comic")]') or die;
     my $title   = $image->attr('title', undef);
     return $self->new_element(
         'div', $image, $title ? [ 'div', [ 'i', $title ] ] : (),

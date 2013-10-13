@@ -17,10 +17,10 @@ use constant {
 #  news today, sorry."
 
 sub render {
-    my ($self, $tree) = @_;
-    my ($image) = $tree->findnodes('//div[@id="comic"]//img[contains(@src,"/comics/")]')
+    my ($self, $doc) = @_;
+    my ($image) = $doc->findnodes('//div[@id="comic"]//img[contains(@src,"/comics/")]')
         or return;
-    my ($news) = $tree->findnodes('//div[@id="news"]');
+    my ($news) = $doc->findnodes('//div[@id="news"]');
     $news = "" if $news && $news->as_trimmed_text =~ /no news today, sorry/i;
     return ($image, $news);
 }

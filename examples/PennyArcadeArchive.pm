@@ -17,9 +17,9 @@ use constant {
 #  was originally posted.)
 
 sub title {
-    my ($self, $tree, $uri) = @_;
-    my $title = $self->SUPER::title($tree, $uri);
-    $title .= " - $2-$3-$1" if $uri =~ m|/comic/(\d+)/(\d+)/(\d+)|;
+    my ($self, $doc) = @_;
+    my $title = $self->SUPER::title($doc);
+    $title .= " - $2-$3-$1" if $doc->source =~ m|/comic/(\d+)/(\d+)/(\d+)|;
     return $title;
 }
 

@@ -25,9 +25,9 @@ use constant {
 
 
 sub render {
-    my ($self, $tree, $uri) = @_;
-    my ($img) = $tree->findnodes('//img[starts-with(@src,"/comics/")]') or return;
-    return $self->cache_image($tree, $uri, $img);
+    my ($self, $doc) = @_;
+    my ($img) = $doc->findnodes('//img[starts-with(@src,"/comics/")]') or return;
+    return $self->cache_image($doc, $img);
 }
 
 
