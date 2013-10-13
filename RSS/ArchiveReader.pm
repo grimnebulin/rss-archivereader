@@ -21,6 +21,7 @@ package RSS::ArchiveReader;
 use DateTime;
 use DateTime::Duration;
 use DateTime::Format::Mail;
+use HTTP::Request;
 use LWP::UserAgent;
 use RSS::ArchiveReader::HtmlDocument;
 use Scalar::Util;
@@ -48,12 +49,14 @@ sub new {
 
     my $self = bless {
         map {
-            $_ => scalar $param->($_)
+            $_ => $param->($_)
         } qw(
              agent_id feed_title feed_link feed_description
              rss_file items_to_fetch items_to_keep render next_page
              autoresolve cache_dir cache_mode cache_url)
     }, $class;
+
+    $self->{agent} = $param{agent} if exists $param{agent};
 
     defined(my $first_page = $param->('first_page'))
         or die "No first page defined\n";
@@ -207,7 +210,7 @@ sub title {
 
 sub get_doc {
     my ($self, $uri) = @_;
-    my $response = $self->get_page($uri);
+    my $response = $self->agent->request($self->make_request($uri));
     $response->is_success
         or die "Failed to download $uri: ", $response->as_string, "\n";
     return RSS::ArchiveReader::HtmlDocument->new(
@@ -215,9 +218,9 @@ sub get_doc {
     );
 }
 
-sub get_page {
+sub make_request {
     my ($self, $uri) = @_;
-    return $self->agent->get($uri);
+    return HTTP::Request->new(GET => $uri);
 }
 
 sub render {
@@ -287,7 +290,8 @@ sub _resolve_element {
     my ($self, $elem, $doc) = @_;
     my $clone = $elem->clone;
     for my $e ($clone->find_by_tag_name('img', 'iframe', 'embed')) {
-        $e->attr('src', $doc->resolve($e->attr('src')));
+        defined(my $src = $e->attr('src')) or next;
+        $e->attr('src', $doc->resolve($src));
     }
     return $clone;
 }
@@ -307,11 +311,9 @@ sub cache_file {
         defined $suffix ? (SUFFIX => $suffix) : (),
     );
 
-    my $response = $self->agent->get(
-        $doc->resolve($href),
-        Referer => $doc->source,
-        ':content_file' => $copy->filename,
-    );
+    my $request = $self->make_request($doc->resolve($href));
+    $request->header(Referer => $doc->source);
+    my $response = $self->agent->request($request);
 
     $response->is_success or return;
     defined $mode or $mode = $self->{cache_mode};
@@ -417,13 +419,21 @@ empty) hash of parameters, of which the following are recognized.
 
 =over 4
 
+=item agent
+
+This is a user-agent object which will be used to dispatch requests to
+the archive referred to by the new object; it should be an instance of
+the C<LWP::UserAgent> class.
+
 =item agent_id
 
-This is the User-Agent string that will be used by the
-C<LWP::UserAgent> object that performs web requests related to this
-object.  It defaults to C<""> (the empty string).  If undefined, no
-explicit user-agent will be set, and so the default agent supplied by
-the C<LWP::UserAgent> module will be used.
+If the C<agent> parameter is not present, then a C<LWP::UserAgent>
+object will be constructed on demand, and this parameter is the
+User-Agent string that it will have.  It defaults to C<""> (the empty
+string).  If undefined, no explicit user-agent will be set, and so the
+default agent supplied by the C<LWP::UserAgent> module will be used.
+
+If the C<agent> parameter is present, this parameter has no effect.
 
 =item feed_title
 
@@ -508,8 +518,8 @@ information.  The default value is C<undef>.
 
 It is convenient not to have to write a constructor for every subclass
 of C<RSS::ArchiveBuilder>, so each of the parameters described above
-can also be supplied by a class method with the same name as the
-parameter, but uppercased.  Explicitly:
+except for C<agent> can also be supplied by a class method with the
+same name as the parameter, but uppercased.  Explicitly:
 
 =over 4
 
@@ -663,20 +673,14 @@ undefined for some reason, then the URI from which the document was
 downloaded.  May be overridden to provide different logic for titling
 items.
 
-=item $reader->get_page($uri)
-
-Returns the web page referred to by the C<URI> object C<$uri> as an
-C<HTTP::Response> object.  The default implementation simply returns
-C<$reader-E<gt>agent-E<gt>get($uri)>.  May be overridden.
-
 =item $reader->get_doc($uri)
 
-A convenience method that fetches the page at C<$uri> by calling
-C<$reader-E<gt>get_page($uri)> and parses the returned content into an
-C<RSS::ArchiveReader::HtmlDocument> object, which is returned.  The
-page is fetched using C<$reader>'s agent and the response is decoded
-by calling C<$reader>'s C<decode_response> method, so this method may
-not be suitable for processing pages outside of the main archive.
+A convenience method that fetches the page at C<$uri> and parses the
+returned content into an C<RSS::ArchiveReader::HtmlDocument> object,
+which is returned.  The page is fetched using C<$reader>'s agent and
+the response is decoded by calling C<$reader>'s C<decode_response>
+method, so this method may not be suitable for processing pages
+outside of the main archive.
 
 =item $reader->render($doc)
 
