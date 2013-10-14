@@ -318,7 +318,7 @@ sub cache_file {
 
     my $request = $self->make_request($doc->resolve($href));
     $request->header(Referer => $doc->source);
-    my $response = $self->agent->request($request);
+    my $response = $self->agent->request($request, $copy->filename);
 
     $response->is_success or return;
     defined $mode or $mode = $self->{cache_mode};
