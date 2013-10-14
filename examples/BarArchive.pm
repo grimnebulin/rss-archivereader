@@ -1,5 +1,6 @@
 package BarArchive;
 
+use HTTP::Request::Common ();
 use parent qw(RSS::ArchiveReader);
 use strict;
 
@@ -19,14 +20,14 @@ use constant {
 #  18 years old, and must click a button to continue to the
 #  originally-requested page.
 #
-#  To get around this, we override the default get_page method (which
-#  uses HTTP GET) and POST to the site instead, providing the "over18"
-#  form parameter that the confirmation page normally provides,
-#  thereby bypassing that page.
+#  To get around this, we override the default make_request method
+#  (which uses HTTP GET) to provide a POST request instead, providing
+#  the "over18" form parameter that the confirmation page normally
+#  provides, thereby bypassing that page.
 
-sub get_page {
+sub make_request {
     my ($self, $uri) = @_;
-    return $self->agent->post($uri, { over18 => 'y' });
+    return HTTP::Request::Common::POST($uri, { over18 => 'y' });
 }
 
 
