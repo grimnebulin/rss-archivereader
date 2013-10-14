@@ -51,17 +51,22 @@ sub new {
         map {
             $_ => $param->($_)
         } qw(
-             agent_id feed_title feed_link feed_description
+             feed_title feed_link feed_description
              rss_file items_to_fetch items_to_keep render next_page
              autoresolve cache_dir cache_mode cache_url)
     }, $class;
 
-    $self->{agent} = $param{agent} if exists $param{agent};
+    if (exists $param{agent}) {
+        $self->{agent} = $param{agent};
+    } else {
+        $self->{agent_id} = $param->('agent_id');
+    }
 
     defined(my $first_page = $param->('first_page'))
         or die "No first page defined\n";
     my $uri = URI->new($first_page);
     defined $uri->scheme or die "First page URI $uri is not absolute\n";
+
     $self->{first_page} = $uri;
 
     return $self;
