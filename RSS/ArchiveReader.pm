@@ -50,10 +50,9 @@ sub new {
     my $self = bless {
         map {
             $_ => $param->($_)
-        } qw(
-             feed_title feed_link feed_description
+        } qw(feed_title feed_link feed_description
              rss_file items_to_fetch items_to_keep render next_page
-             autoresolve cache_dir cache_mode cache_url
+             filter autoresolve cache_dir cache_mode cache_url
              end_of_archive_notify end_of_archive_message)
     }, $class;
 
@@ -110,6 +109,10 @@ sub NEXT_PAGE {
     return undef;
 }
 
+sub FILTER {
+    return undef;
+}
+
 sub FIRST_PAGE {
     return undef;
 }
@@ -148,42 +151,38 @@ sub agent {
 sub run {
     my ($self, %param) = @_;
     my $now   = DateTime->now;
-    my $time  = $now - $ONE_SECOND * $self->{items_to_fetch};
+    my $count = $self->{items_to_fetch};
+    my $time  = $now - $ONE_SECOND * $count;
     my $rss   = $self->_get_rss;
     my $items = $rss->{items};
-    my $count = $self->{items_to_fetch};
-    my $uri;
+    my $doc;
 
     if (@$items) {
         my $final = $items->[-1];
         if (defined $final->{link}) {
             my $link = URI->new($final->{link});
-            my $doc = $self->get_doc($link);
-            if (my $next = $self->next_page($doc)) {
-                $uri = $doc->resolve($next);
-            } elsif ($self->{end_of_archive_notify} &&
+            $doc = $self->get_doc($link);
+            $doc = $self->_get_next_page($doc);
+            if (!$doc && $self->{end_of_archive_notify} &&
                 $final->{description} ne $self->{end_of_archive_message}) {
                 $self->_notify_end_of_archive($rss, $now);
             }
         }
     } else {
-        $uri = $self->{first_page};
+        $doc = $self->get_doc($self->{first_page}->clone);
     }
 
-    while (--$count >= 0 && $uri) {
-        my $doc = $self->get_doc($uri->clone);
+    while (--$count >= 0 && $doc) {
         $rss->add_item(
-            link        => "$uri",
+            link        => $doc->source->as_string,
             title       => scalar $self->title($doc),
             description => $self->_stringify($doc, $self->render($doc)),
             pubDate     => DateTime::Format::Mail->format_datetime($time),
         );
         if ($count > 0) {
             $time += $ONE_SECOND;
-            if (my $next_uri = $self->next_page($doc)) {
-                $uri = $doc->resolve($next_uri);
-            } elsif ($self->{end_of_archive_notify}) {
-                undef $uri;
+            $doc = $self->_get_next_page($doc);
+            if (!$doc && $self->{end_of_archive_notify}) {
                 $self->_notify_end_of_archive($rss, $time);
             }
         }
@@ -272,6 +271,12 @@ sub next_page {
 
 }
 
+sub filter {
+    my ($self, $doc) = @_;
+    return !defined $self->{filter} ||
+           $doc->findnodes($self->{filter})->size > 0;
+}
+
 sub new_element {
     my $self = shift;
     require HTML::Element;
@@ -329,6 +334,15 @@ sub _notify_end_of_archive {
         description => $self->{end_of_archive_message},
         pubDate     => $time,
     );
+}
+
+sub _get_next_page {
+    my ($self, $doc) = @_;
+    do {
+        my $href = $self->next_page($doc);
+        $doc = defined $href && $self->get_doc($doc->resolve($href));
+    } while ($doc && !$self->filter($doc));
+    return $doc || ();
 }
 
 sub cache_file {
@@ -523,6 +537,14 @@ The default implementation of the C<next_page> method uses this
 parameter as an XPath expression to locate the "next" link on a web
 page.
 
+=item filter
+
+The default implementation of the C<filter> method applies this
+parameter as an XPath expression to downloaded archive pages; those
+which return a nonempty nodeset are propagated to the output RSS
+feed.  The default value is C<undef>, meaning that no filtering is
+applied.
+
 =item autoresolve
 
 A boolean flag.  If true, then the C<src> attributes of any C<img>,
@@ -591,6 +613,8 @@ same name as the parameter, but uppercased.  Explicitly:
 =item RENDER
 
 =item NEXT_PAGE
+
+=item FILTER
 
 =item AUTORESOLVE
 
@@ -770,6 +794,21 @@ attribute's value is returned otherwise.
 
 This method may be overridden to provide different logic for
 traversing the pages of an archive.
+
+=item $reader->filter($doc)
+
+This method should return true if the archive page represented by the
+C<RSS::ArchiveReader::HtmlDocument> object C<$doc> should be
+propagated to the output RSS feed.
+
+The default implementation examines the C<filter> parameter.  If it is
+undefined (the default), a true value is returned, meaning that no
+filtering is performed.  Otherwise, the parameter's value is applied
+to C<$doc> as an XPath expression.  The method returns true if the
+expression returns a nonempty nodeset, and false otherwise.
+
+This method may be overridden to provide different logic for filtering
+pages from the output RSS feed.
 
 =item $reader->decode_response($response)
 
