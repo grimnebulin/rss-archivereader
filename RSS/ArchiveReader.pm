@@ -53,7 +53,8 @@ sub new {
         } qw(
              feed_title feed_link feed_description
              rss_file items_to_fetch items_to_keep render next_page
-             autoresolve cache_dir cache_mode cache_url)
+             autoresolve cache_dir cache_mode cache_url
+             end_of_archive_notify end_of_archive_message)
     }, $class;
 
     if (exists $param{agent}) {
@@ -117,6 +118,14 @@ sub AUTORESOLVE {
     return 1;
 }
 
+sub END_OF_ARCHIVE_NOTIFY {
+    return 1;
+}
+
+sub END_OF_ARCHIVE_MESSAGE {
+    return 'End of archive has been reached.';
+}
+
 sub CACHE_DIR {
     return undef;
 }
@@ -138,17 +147,25 @@ sub agent {
 
 sub run {
     my ($self, %param) = @_;
-    my $time  = DateTime->now - $ONE_SECOND * $self->{items_to_fetch};
+    my $now   = DateTime->now;
+    my $time  = $now - $ONE_SECOND * $self->{items_to_fetch};
     my $rss   = $self->_get_rss;
     my $items = $rss->{items};
     my $count = $self->{items_to_fetch};
     my $uri;
 
     if (@$items) {
-        my $link = URI->new($items->[-1]{link});
-        my $doc  = $self->get_doc($link);
-        my $next = $self->next_page($doc);
-        $uri = $next && $doc->resolve($next);
+        my $final = $items->[-1];
+        if (defined $final->{link}) {
+            my $link = URI->new($final->{link});
+            my $doc = $self->get_doc($link);
+            if (my $next = $self->next_page($doc)) {
+                $uri = $doc->resolve($next);
+            } elsif ($self->{end_of_archive_notify} &&
+                $final->{description} ne $self->{end_of_archive_message}) {
+                $self->_notify_end_of_archive($rss, $now);
+            }
+        }
     } else {
         $uri = $self->{first_page};
     }
@@ -163,8 +180,12 @@ sub run {
         );
         if ($count > 0) {
             $time += $ONE_SECOND;
-            my $next_uri = $self->next_page($doc);
-            $uri = $next_uri && $doc->resolve($next_uri);
+            if (my $next_uri = $self->next_page($doc)) {
+                $uri = $doc->resolve($next_uri);
+            } elsif ($self->{end_of_archive_notify}) {
+                undef $uri;
+                $self->_notify_end_of_archive($rss, $time);
+            }
         }
     }
 
@@ -299,6 +320,15 @@ sub _resolve_element {
         $e->attr('src', $doc->resolve($src));
     }
     return $clone;
+}
+
+sub _notify_end_of_archive {
+    my ($self, $rss, $time) = @_;
+    $rss->add_item(
+        title       => $self->{end_of_archive_message},
+        description => $self->{end_of_archive_message},
+        pubDate     => $time,
+    );
 }
 
 sub cache_file {
@@ -504,6 +534,20 @@ originated.
 
 The default value is true.
 
+=item end_of_archive_notify
+
+A boolean flag.  If true, then when the end of an archive is reached
+(as indicated by the C<next_page> method returning nothing), a special
+"end of archive" message is appended to the output RSS feed.  The
+default value is true.
+
+=item end_of_archive_message
+
+This parameter contains the content of the special "end of archive"
+message that is created when the end of an archive is reached and the
+C<end_of_archive_notify> parameter is true.  The default value is "End
+of archive has been reached."
+
 =item cache_dir
 
 A directory for cached files.  See the C<cache_file> method for more
@@ -549,6 +593,10 @@ same name as the parameter, but uppercased.  Explicitly:
 =item NEXT_PAGE
 
 =item AUTORESOLVE
+
+=item END_OF_ARCHIVE_NOTIFY
+
+=item END_OF_ARCHIVE_MESSAGE
 
 =item CACHE_DIR
 
@@ -706,19 +754,19 @@ the pages of an archive.
 
 =item $reader->next_page($doc)
 
-Returns the URI of the archive page represented by the
-C<RSS::ArchiveReader::HtmlDocument> object C<$doc>.  The returned URI
-need not be absolute; it is resolved into an absolute URI if
-necessary.
+Returns the URI of the archive page following the page represented by
+the C<RSS::ArchiveReader::HtmlDocument> object C<$doc>.  The returned
+URI need not be absolute; it is resolved into an absolute URI if
+necessary.  The method may return nothing, which indicates that the
+end of the archive has been reached.
 
 The default implementation uses the C<next_page> parameter (throwing
 an exception if it is not defined) as an XPath expression, applying it
 to C<$doc>.  If no node is matched by the expression, then nothing is
-returned, indicating that the end of the archive has been reached.
-Otherwise, the first of the matching nodes must be an instance of the
-class C<HTML::TreeBuilder::XPath::Attribute> (that is, it must match
-an attribute node), or an exception is thrown.  The attribute's value
-is returned otherwise.
+returned.  Otherwise, the first of the matching nodes must be an
+instance of the class C<HTML::TreeBuilder::XPath::Attribute> (that is,
+it must match an attribute node), or an exception is thrown.  The
+attribute's value is returned otherwise.
 
 This method may be overridden to provide different logic for
 traversing the pages of an archive.
