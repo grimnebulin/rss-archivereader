@@ -53,17 +53,6 @@ sub resolve {
     return URI->new_abs($href, $self->base || $self->source);
 }
 
-{
-
-package HTML::Element;
-
-sub attr_absolute {
-    my $self = shift;
-    return $self->root->resolve($self->attr(@_));
-}
-
-}
-
 1;
 
 __END__
@@ -83,9 +72,6 @@ RSS::ArchiveReader::HtmlDocument - represents a downloaded HTML page
     print $doc->base;  # URI of <base> element, if any
 
     print $doc->resolve('relative-url');  # resolves to absolute URI
-
-    print $doc->findnodes('//a')->shift->attr_absolute('href');
-    # automatically resolve URI attributes
 
 =head1 DESCRIPTION
 
@@ -143,22 +129,5 @@ Otherwise, it is resolved to an absolute URI by taking it relative to
 C<$doc-E<gt>base>, if that is defined, or else relative to
 C<$doc-E<gt>source>.  That absolute URI (a new C<URI> object) is
 returned.
-
-=back
-
-When loaded, this package also adds a single method to the
-C<HTML::Element> class.
-
-=over 4
-
-=item $elem->attr_absolute(...)
-
-This is an enhanced version of the C<attr> method which ensures the
-value it returns is an absolute URI by passing it to the C<resolve>
-method of its root element.  Naturally, the C<resolve> method will
-only exist when the root element is an instance of
-C<RSS::ArchiveReader::HtmlDocument>, so an error will occur if
-C<attr_absolute> is called on C<HTML::Element> object that does not
-belong to a C<RSS::ArchiveReader::HtmlDocument> tree.
 
 =back
