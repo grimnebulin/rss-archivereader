@@ -402,6 +402,23 @@ sub cache_image {
 
 }
 
+sub find {
+    my ($self, $context, $path, @classes) = @_;
+    return RSS::ArchiveReader::HtmlDocument::_find_all($context, $path, @classes)
+}
+
+sub remove {
+    my ($self, $context, $path, @classes) = @_;
+    RSS::ArchiveReader::HtmlDocument::_remove($context, $path, @classes);
+    return $self;
+}
+
+sub truncate {
+    my ($self, $context, $path, @classes) = @_;
+    RSS::ArchiveReader::HtmlDocument::_truncate($context, $path, @classes);
+    return $self;
+}
+
 
 1;
 
@@ -855,6 +872,30 @@ C<height>, C<alt>, and C<title> attributes of the original element,
 except that whichever of the C<width> or C<height> attributes were not
 present (if any) are set by examining the file with the C<Image::Size>
 module, if it's available.
+
+=item $reader->find($context, $path [, @classes ])
+
+This method is an alternate entry point for the enhanced node-finding
+functionality offered by the C<RSS::ArchiveReader::HtmlDocument>
+class.  It simply returns C<$context-E<gt>findnodes($path)> after
+replacing C<"%s"> escape sequences in C<$path> by an XPath expression
+for the classes in C<@classes>.  See C<RSS::ArchiveReader::HtmlDocument> for
+more details.
+
+=item $reader->remove($context, $path [, @classes ]);
+
+This method is an alternate entry point for the node-removing
+functionality of the C<RSS::ArchiveReader::HtmlDocument> class.  In
+short, the nodes returned by C<$reader-E<gt>find($context, $path,
+@classes)> are removed from the document to which they belong.
+
+=item $reader->truncate($context, $path [, @classes ]);
+
+This method is an alternate entry point for the node-truncating
+functionality of the C<RSS::ArchiveReader::HtmlDocument> class.  In
+short, the nodes returned by C<$reader-E<gt>find($context, $path,
+@classes)>, along with the following sibling elements of each, are
+removed from the document to which they belong.
 
 =item $reader->new_element(...)
 
