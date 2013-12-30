@@ -48,12 +48,19 @@ sub new {
     };
 
     my $self = bless {
-        map {
-            $_ => $param->($_)
-        } qw(feed_title feed_link feed_description
-             rss_file items_to_fetch items_to_keep render next_page
-             filter autoresolve cache_dir cache_mode cache_url
-             end_of_archive_notify end_of_archive_message)
+        (
+            map {
+                $_ => $param->($_)
+            } qw(feed_title feed_link feed_description
+                 rss_file items_to_fetch items_to_keep
+                 autoresolve cache_dir cache_mode cache_url
+                 end_of_archive_notify end_of_archive_message)
+        ),
+        (
+            map {
+                $_ => scalar _normalize($param->($_))
+            } qw(render next_page filter)
+        ),
     }, $class;
 
     if (exists $param{agent}) {
@@ -71,6 +78,19 @@ sub new {
 
     return $self;
 
+}
+
+sub _normalize {
+    my $value = shift;
+    if (!defined $value) {
+        return;
+    } elsif (!Scalar::Util::blessed($value) &&
+             Scalar::Util::reftype($value) eq 'ARRAY') {
+        return [ map { "$_" } @$value ];
+    } else {
+        $value =~ s/%/%%/g;
+        return [ $value ];
+    }
 }
 
 sub AGENT_ID {
@@ -252,7 +272,7 @@ sub render {
     my ($self, $doc) = @_;
     defined(my $xpath = $self->{render})
         or die "Don't know how to render pages\n";
-    my ($elem) = $doc->findnodes($xpath) or return;
+    my ($elem) = $doc->find(@$xpath) or return;
     return $elem;
 }
 
@@ -262,10 +282,11 @@ sub next_page {
     defined(my $xpath = $self->{next_page})
         or die "Don't know how to advance to next page\n";
 
-    my ($href) = $doc->findnodes($xpath) or return;
+    my ($href) = $doc->find(@$xpath) or return;
 
-    Scalar::Util::blessed($href) && $href->isa('HTML::TreeBuilder::XPath::Attribute')
-        or die "next_page parameter did not return an attribute node\n";
+    Scalar::Util::blessed($href)
+        && $href->isa('HTML::TreeBuilder::XPath::Attribute')
+            or die "next_page parameter did not return an attribute node\n";
 
     return $href->getValue;
 
@@ -273,8 +294,8 @@ sub next_page {
 
 sub filter {
     my ($self, $doc) = @_;
-    return !defined $self->{filter} ||
-           $doc->findnodes($self->{filter})->size > 0;
+    my $filter = $self->{filter};
+    return !defined $filter || $doc->find(@$filter)->size > 0;
 }
 
 sub new_element {
