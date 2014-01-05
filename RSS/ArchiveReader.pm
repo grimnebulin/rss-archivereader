@@ -86,10 +86,9 @@ sub _normalize {
         return;
     } elsif (!Scalar::Util::blessed($value) &&
              Scalar::Util::reftype($value) eq 'ARRAY') {
-        return [ map { "$_" } @$value ];
+        return RSS::ArchiveReader::HtmlDocument::_format_path(@$value);
     } else {
-        $value =~ s/%/%%/g;
-        return [ $value ];
+        return $value;
     }
 }
 
@@ -272,7 +271,7 @@ sub render {
     my ($self, $doc) = @_;
     defined(my $xpath = $self->{render})
         or die "Don't know how to render pages\n";
-    my ($elem) = $doc->find(@$xpath) or return;
+    my ($elem) = $doc->findnodes($xpath) or return;
     return $elem;
 }
 
@@ -282,7 +281,7 @@ sub next_page {
     defined(my $xpath = $self->{next_page})
         or die "Don't know how to advance to next page\n";
 
-    my ($href) = $doc->find(@$xpath) or return;
+    my ($href) = $doc->findnodes($xpath) or return;
 
     Scalar::Util::blessed($href)
         && $href->isa('HTML::TreeBuilder::XPath::Attribute')
@@ -295,7 +294,7 @@ sub next_page {
 sub filter {
     my ($self, $doc) = @_;
     my $filter = $self->{filter};
-    return !defined $filter || $doc->find(@$filter)->size > 0;
+    return !defined $filter || $doc->findnodes($filter)->size > 0;
 }
 
 sub new_element {
