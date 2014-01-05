@@ -38,7 +38,7 @@ sub source {
 
 sub base {
     my $self = shift;
-    for my $base ($self->{tree}->find('/html/head/base/@href')) {
+    for my $base ($self->{tree}->findnodes('/html/head/base/@href')) {
         my $uri = URI->new($base->getValue);
         return $uri if defined $uri->scheme;
     }
