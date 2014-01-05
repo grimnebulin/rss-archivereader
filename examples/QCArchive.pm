@@ -18,9 +18,9 @@ use constant {
 
 sub render {
     my ($self, $doc) = @_;
-    my ($image) = $doc->findnodes('//div[@id="comic"]//img[contains(@src,"/comics/")]')
+    my ($image) = $doc->find('//div[@id="comic"]//img[contains(@src,"/comics/")]')
         or return;
-    my ($news) = $doc->findnodes('//div[@id="news"]');
+    my ($news) = $doc->find('//div[@id="news"]');
     $news = "" if $news && $news->as_trimmed_text =~ /no news today, sorry/i;
     return ($image, $news);
 }

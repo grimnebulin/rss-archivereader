@@ -20,7 +20,7 @@ sub render {
         $self->new_element(
             'div', [ 'img', { src => $_->attr_absolute('href') } ]
         )
-    } $doc->findnodes('//a[img[contains(@src,"/thumbs/")]]');
+    } $doc->find('//a[img[contains(@src,"/thumbs/")]]');
 }
 
 

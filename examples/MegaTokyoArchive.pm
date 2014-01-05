@@ -9,7 +9,7 @@ use constant {
     FIRST_PAGE     => 'http://megatokyo.com/strip/1',
     ITEMS_TO_FETCH => 5,
     RENDER         => '//span[@id="strip"]//img[contains(@src,"strips/")]',
-    NEXT_PAGE      => '//li[contains(concat(" ",normalize-space(@class)," ")," next ")]//a/@href',
+    NEXT_PAGE      => [ '//li[%s]//a/@href', 'next' ],
 };
 
 #  Here we simply use the "title" attribute of the main image (if it
@@ -18,7 +18,7 @@ use constant {
 
 sub title {
     my ($self, $doc) = @_;
-    my ($title) = $doc->findnodes($self->RENDER . '/@title')
+    my ($title) = $doc->find($self->RENDER . '/@title')
         or return $self->SUPER::title($doc);
     return $title->getValue;
 }

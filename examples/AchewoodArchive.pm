@@ -33,7 +33,7 @@ sub title {
 
 sub render {
     my ($self, $doc) = @_;
-    my ($image) = $doc->findnodes('//img[contains(@class,"comic")]') or die;
+    my ($image) = $doc->find('//img[%s]', 'comic') or die;
     my $title   = $image->attr('title', undef);
     return $self->new_element(
         'div', $image, $title ? [ 'div', [ 'i', $title ] ] : (),

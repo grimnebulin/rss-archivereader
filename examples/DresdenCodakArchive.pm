@@ -11,7 +11,8 @@ use constant {
     FIRST_PAGE     => 'http://dresdencodak.com/2005/06/08/the-tomorrow-man/',
     ITEMS_TO_FETCH => 3,
     RENDER         => '//div[@id="comic"]//img',
-    NEXT_PAGE      => '//div[contains(@class,"menunav")]//a[img[contains(@src,"m_next")]]/@href',
+    NEXT_PAGE      => [ '//div[%s]//a[img[contains(@src,"m_next")]]/@href',
+                        'menunav' ],
 };
 
 

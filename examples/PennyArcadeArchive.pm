@@ -8,7 +8,7 @@ use constant {
     RSS_FILE       => "$ENV{HOME}/www/rss/pennyarcade.xml",
     FIRST_PAGE     => 'http://www.penny-arcade.com/comic/1998/11/18',
     ITEMS_TO_FETCH => 5,
-    RENDER         => '//div[contains(@class,"comic")]/img',
+    RENDER         => [ '//div[%s]/img', 'comic' ],
     NEXT_PAGE      => '//a[@title="Next"]/@href',
 };
 

@@ -26,7 +26,7 @@ use constant {
 
 sub render {
     my ($self, $doc) = @_;
-    my ($img) = $doc->findnodes('//img[starts-with(@src,"/comics/")]') or return;
+    my ($img) = $doc->find('//img[starts-with(@src,"/comics/")]') or return;
     return $self->cache_image($doc, $img);
 }
 
