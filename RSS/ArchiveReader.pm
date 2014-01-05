@@ -569,11 +569,21 @@ exception if the parameter is not defined, but a subclass may override
 this method with a subroutine that does not care if it's defined or
 not.
 
+Alternately, the value of this parameter may be an unblessed array
+reference.  If so, its first element is interpreted as an XPath
+expression which may contain embedded C<%s> sequences, and its
+remaining elements are classes which will be expanded into XPath
+expressions that match those classes and substituted in place of the
+C<%s> sequences in the first element, in order.  See the C<find>
+method in the C<RSS::ArchiveReader::HtmlDocument> class for more
+details on how this expansion is performed.
+
 =item next_page
 
 The default implementation of the C<next_page> method uses this
 parameter as an XPath expression to locate the "next" link on a web
-page.
+page.  The parameter may also be an unblessed array reference, which
+has the same meaning as for the C<render> parameter above.
 
 =item filter
 
@@ -582,6 +592,9 @@ parameter as an XPath expression to downloaded archive pages; those
 which return a nonempty nodeset are propagated to the output RSS
 feed.  The default value is C<undef>, meaning that no filtering is
 applied.
+
+The parameter may also be an unblessed array reference, which
+has the same meaning as for the C<render> parameter above.
 
 =item autoresolve
 
@@ -605,8 +618,8 @@ default value is true.
 
 This parameter contains the content of the special "end of archive"
 message that is created when the end of an archive is reached and the
-C<end_of_archive_notify> parameter is true.  The default value is "End
-of archive has been reached."
+C<end_of_archive_notify> parameter is true.  The default value is the
+string "End of archive has been reached."
 
 =item cache_dir
 

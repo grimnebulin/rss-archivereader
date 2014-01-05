@@ -216,9 +216,11 @@ call:
     //div[contains(concat(" ",normalize-space(@class)," ")," header ")]/
       div[contains(concat(" ",normalize-space(@class)," ")," subheader ")]
 
-This substitution is performed by a simple call to C<sprintf>, so any
-extra arguments are discarded, and any extra C<"%s"> sequences are
-deleted.
+This substitution is performed by a simple call to Perl's C<sprintf>
+function, so any extra arguments are discarded, any extra C<"%s">
+sequences are deleted, any literal "%" characters in the pattern must
+be doubled, and no other %-escapes recognized by C<sprintf> should be
+used.
 
 =item $doc->findnodes($xpath)
 
