@@ -84,7 +84,7 @@ sub _normalize {
     my $value = shift;
     if (!defined $value) {
         return;
-    } elsif (!Scalar::Util::blessed($value) &&
+    } elsif (!defined Scalar::Util::blessed($value) &&
              Scalar::Util::reftype($value) eq 'ARRAY') {
         return RSS::ArchiveReader::HtmlDocument::_format_path(@$value);
     } else {
@@ -283,7 +283,7 @@ sub next_page {
 
     my ($href) = $doc->findnodes($xpath) or return;
 
-    Scalar::Util::blessed($href)
+    defined Scalar::Util::blessed($href)
         && $href->isa('HTML::TreeBuilder::XPath::Attribute')
             or die "next_page parameter did not return an attribute node\n";
 
@@ -330,7 +330,7 @@ sub extra_channel_params {
 sub _stringify {
     my ($self, $doc, @chunk) = @_;
     return join "", map {
-        Scalar::Util::blessed($_) && $_->isa('HTML::Element')
+        defined Scalar::Util::blessed($_) && $_->isa('HTML::Element')
             ? ($self->{autoresolve} ? $self->_resolve_element($_, $doc) : $_)
                   ->as_HTML("", undef, { })
             : $_
