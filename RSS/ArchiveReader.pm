@@ -35,6 +35,11 @@ my $RUNS_TO_KEEP = 5;
 
 my $ONE_SECOND = DateTime::Duration->new(seconds => 1);
 
+my %AUTORESOLVE = (
+    src  => [ qw(img iframe embed) ],
+    href => [ qw(a) ],
+);
+
 ########################################
 
 sub new {
@@ -340,9 +345,11 @@ sub _stringify {
 sub _resolve_element {
     my ($self, $elem, $doc) = @_;
     my $clone = $elem->clone;
-    for my $e ($clone->find_by_tag_name('img', 'iframe', 'embed')) {
-        defined(my $src = $e->attr('src')) or next;
-        $e->attr('src', $doc->resolve($src));
+    while (my ($attr, $tags) = each %AUTORESOLVE) {
+        for my $e ($clone->find_by_tag_name(@$tags)) {
+            defined(my $attrval = $e->attr($attr)) or next;
+            $e->attr($attr, $doc->resolve($attrval));
+        }
     }
     return $clone;
 }
