@@ -25,6 +25,7 @@ use strict;
 
 sub new {
     my ($class, $uri, @chunk) = @_;
+    ref $uri or $uri = URI->new($uri);
     defined $uri->scheme or die "URI argument must be absolute\n";
     my $tree = HTML::TreeBuilder::XPath->new(ignore_unknown => 0);
     $tree->parse($_) for @chunk;
