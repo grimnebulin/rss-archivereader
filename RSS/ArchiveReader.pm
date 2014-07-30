@@ -276,8 +276,10 @@ sub render {
     my ($self, $doc) = @_;
     defined(my $xpath = $self->{render})
         or die "Don't know how to render pages\n";
-    my ($elem) = $doc->findnodes($xpath) or return;
-    return $elem;
+    my @elems = $doc->findnodes($xpath);
+    return @elems    if wantarray;
+    return $elems[0] if @elems;
+    return;
 }
 
 sub next_page {
