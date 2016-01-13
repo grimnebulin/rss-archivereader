@@ -22,7 +22,6 @@ use DateTime;
 use DateTime::Duration;
 use DateTime::Format::Mail;
 use HTTP::Request;
-use LWP::UserAgent;
 use RSS::ArchiveReader::HtmlDocument;
 use Scalar::Util;
 use URI;
@@ -69,9 +68,20 @@ sub new {
     }, $class;
 
     if (exists $param{agent}) {
-        $self->{agent} = $param{agent};
+        if (Scalar::Util::blessed($param{agent})) {
+            $self->{agent} = $param{agent};
+        } elsif (Scalar::Util::reftype($param{agent}) eq 'HASH') {
+            $self->{agent_ctor_args} = $param{agent};
+        } else {
+            die "agent parameter must be a blessed reference or unblessed hash";
+        }
     } else {
-        $self->{agent_id} = $param->('agent_id');
+        $self->{agent_ctor_args} = { };
+    }
+
+    if (my $args = $self->{agent_ctor_args}) {
+        $args->{agent} = $param->('agent_id') if !exists $args->{agent};
+        delete $args->{agent} if !defined $args->{agent};
     }
 
     defined(my $first_page = $param->('first_page'))
@@ -167,9 +177,10 @@ sub CACHE_MODE {
 
 sub agent {
     my $self = shift;
-    return $self->{agent} ||= LWP::UserAgent->new(
-        defined $self->{agent_id} ? (agent => $self->{agent_id}) : (),
-    );
+    return $self->{agent} ||= do {
+        require LWP::UserAgent;
+        LWP::UserAgent->new(%{ $self->{agent_ctor_args} });
+    };
 }
 
 sub run {
@@ -516,19 +527,29 @@ empty) hash of parameters, of which the following are recognized.
 
 =item agent
 
-This is a user-agent object which will be used to dispatch requests to
-the archive referred to by the new object; it should be an instance of
-the C<LWP::UserAgent> class.
+This parameter must be either a blessed reference of any type or an
+unblessed hash reference.  In the former case, it is taken to be a
+user agent object, either a member of the class C<LWP::UserAgent> or
+some other class that implements the same interface.  In the latter
+case, an instance of the C<LWP::UserAgent> class will be constructed
+on demand, and the contents of the hash will be passed to that class's
+constructor.
+
+The user-agent object, so provided or constructed, will be used to
+dispatch requests to the archive referred to by the new object.
 
 =item agent_id
 
-If the C<agent> parameter is not present, then a C<LWP::UserAgent>
-object will be constructed on demand, and this parameter is the
-User-Agent string that it will have.  It defaults to C<""> (the empty
-string).  If undefined, no explicit user-agent will be set, and so the
-default agent supplied by the C<LWP::UserAgent> module will be used.
+This parameter specifies the User-Agent that the web agent employed by
+this object will use, if an agent object was not passed in to the
+C<agent> parameter (see above).
 
-If the C<agent> parameter is present, this parameter has no effect.
+An C<agent> C<LWP::UserAgent> constructor parameter passed to this
+class's C<agent> parameter overrides this parameter.
+
+The default value is C<""> (the empty string).  If undefined, no
+explicit user-agent will be set, and so the default agent supplied by
+the C<LWP::UserAgent> module will be used.
 
 =item feed_title
 
