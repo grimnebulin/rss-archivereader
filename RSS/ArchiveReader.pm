@@ -673,9 +673,9 @@ information.  The default value is C<undef>.
 =back
 
 It is convenient not to have to write a constructor for every subclass
-of C<RSS::ArchiveBuilder>, so each of the parameters described above
-except for C<agent> can also be supplied by a class method with the
-same name as the parameter, but uppercased.  Explicitly:
+of C<RSS::ArchiveBuilder>, so most of the parameters described above
+can also be supplied by a class method with the same name as the
+parameter, but uppercased.  Specifically:
 
 =over 4
 
