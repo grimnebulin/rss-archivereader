@@ -67,17 +67,6 @@ sub new {
         ),
     }, $class;
 
-    if (exists $param{agent}) {
-        $self->{agent} = $param{agent};
-    } else {
-        my $config = $param->('agent_config');
-        my $id     = $param->('agent_id');
-        $self->{agent_config} = {
-            defined $id ? (agent => $id) : (),
-            defined $config ? %$config : (),
-        };
-    }
-
     defined(my $first_page = $param->('first_page'))
         or die "No first page defined\n";
     my $uri = URI->new($first_page);
@@ -85,8 +74,36 @@ sub new {
 
     $self->{first_page} = $uri;
 
+    if (exists $param{agent}) {
+        $self->{agent} = $param{agent};
+    } else {
+        my $config = $param->('agent_config');
+        my $id     = $param->('agent_id');
+        my $jar    = $self->_cookie_jar($param->('cookies'));
+        $self->{agent_config} = {
+            defined $id ? (agent => $id) : (),
+            defined $jar ? (cookie_jar => $jar) : (),
+            defined $config ? %$config : (),
+        };
+    }
+
     return $self;
 
+}
+
+sub _cookie_jar {
+    my ($self, $cookies) = @_;
+    return if !$cookies;
+    require HTTP::Cookies;
+    my $jar = HTTP::Cookies->new;
+    if (ref $cookies eq 'ARRAY') {
+        my @cookies = @$cookies;
+        my $domain = $self->{first_page}->host;
+        while (@cookies) {
+            $jar->set_cookie('1', splice(@cookies, 0, 2), '/', $domain);
+        }
+    }
+    return $jar;
 }
 
 sub _normalize {
@@ -107,6 +124,10 @@ sub AGENT_ID {
 
 sub AGENT_CONFIG {
     return undef;
+}
+
+sub COOKIES {
+    return;
 }
 
 sub FEED_TITLE {
@@ -177,8 +198,14 @@ sub agent {
     my $self = shift;
     return $self->{agent} ||= do {
         require LWP::UserAgent;
-        LWP::UserAgent->new(%{ $self->{agent_config} });
+        my $agent = LWP::UserAgent->new(%{ $self->{agent_config} });
+        $self->configure_agent($agent);
+        $agent;
     };
+}
+
+sub configure_agent {
+    return;
 }
 
 sub run {
@@ -530,14 +557,15 @@ the archive referred to by the new object; it should be an instance of
 the C<LWP::UserAgent> class.
 
 If this parameter is not present, an C<LPW::UserAgent> object will be
-constructed when needed.  This object can be configured by the
-parameters C<agent_config> and C<agent_id>, below.
+constructed when needed.  This automatically-constructed object can be
+configured by the parameters C<agent_config>, C<agent_id>, and
+C<cookies>, below.
 
 =item agent_config
 
 If defined, this parameter should be a hash of parameters that will be
-passed to the C<LWP::UserAgent> constructor when an object of that
-type is needed.  It is ignored if the C<agent> parameter is present.
+passed to the C<LWP::UserAgent> constructor when such an object is
+created.  It is ignored if the C<agent> parameter is present.
 
 The default value is C<undef>.
 
@@ -548,13 +576,38 @@ convenient way to set it.
 =item agent_id
 
 This parameter specifies the user-agent that will be passed to the
-C<LWP::UserAgent> constructor when an object of that type is needed.
-It is ignored if the C<agent> parameter is present, or if an C<agent>
-key is present in the C<agent_config> parameter.
+C<LWP::UserAgent> constructor when such an object is created.  It is
+ignored if the C<agent> parameter is present, or if an C<agent> key is
+present in the C<agent_config> parameter.
 
 The default value is C<""> (the empty string).  If undefined, no
 explicit user-agent will be set, and so the default agent supplied by
 the C<LWP::UserAgent> module will be used.
+
+=item cookies
+
+This parameter describes the cookie jar that will be passed to the
+C<LWP::UserAgent> constructor when such an object is created.  It is
+ignored if the C<agent> parameter is present.
+
+If the parameter is false, no cookie jar will be used by the agent.
+This is the default.
+
+If the parameter is true, but not an array reference, the agent will
+be constructed with an empty cookie jar.
+
+If the parameter is an array reference, it is taken to be a flat list
+of key-value pairs.  Each pair is passed to the C<set_cookie> method
+of a new instance of the C<HTTP::Cookies> class as the C<$key> and
+C<$value> parameters.  The other cookie parameters required by that
+method are generated automatically: C<$version> is C<'1'>, C<$path> is
+C<'/'>, and C<$domain> is taken from this object's C<first_page> URL
+parameter.
+
+This C<cookies> parameter is meant to be a simple way to presupply
+cookies for common use cases.  If cookies are needed which don't
+conform to the pattern described above, they can be added in an
+overridden C<configure_agent> method (which see).
 
 =item feed_title
 
@@ -683,6 +736,8 @@ parameter, but uppercased.  Specifically:
 
 =item AGENT_CONFIG
 
+=item COOKIES
+
 =item FEED_TITLE
 
 =item FEED_LINK
@@ -736,6 +791,14 @@ returned by these methods.
 
 Returns the C<LWP::UserAgent> object used by this object, creating it
 if it does not already exist.
+
+=item $reader->configure_agent($agent)
+
+This method is called after an agent object has been created
+automatically.  The default implementation does nothing, but a
+subclass may override the method to perform additional configuration
+of the agent, perhaps beyond what is convenient to do by means of the
+C<agent_config> parameter.
 
 =item $reader->run(%param)
 
